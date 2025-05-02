@@ -7,12 +7,11 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  getKeyValue,
-  Button,
+  getKeyValue
 } from '@heroui/react';
 
 function App() {
-  const [tasks, setTasks] = useState([]); // Tasks fetched from backend
+  const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [editingKey, setEditingKey] = useState(null);
 
@@ -26,19 +25,27 @@ function App() {
   const [showCompleted, setShowCompleted] = useState(true);
   const [showPending, setShowPending] = useState(true);
 
-  // Fetch tasks from backend
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/tasks');
-        setTasks(response.data);
-      } catch (error) {
-        console.error('Error fetching tasks:', error);
-      }
-    };
+  // Fetch tasks based on filters using backend prepared statements
+  const fetchTasks = async () => {
+    try {
+      let endpoint = 'http://localhost:5000/tasks';
 
-    fetchTasks(); // Fetch tasks when the component mounts
-  }, []);
+      if (!showCompleted && showPending) {
+        endpoint = 'http://localhost:5000/tasks/pending';
+      } else if (showCompleted && !showPending) {
+        endpoint = 'http://localhost:5000/tasks/completed';
+      }
+
+      const response = await axios.get(endpoint);
+      setTasks(response.data);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, [showCompleted, showPending]);
 
   // Add a new task
   const addTask = async () => {
@@ -48,7 +55,7 @@ function App() {
           title: newTask,
           status: 'Pending',
         });
-        setTasks([...tasks, response.data]); // Add the new task to the state
+        setTasks([...tasks, response.data]);
         setNewTask('');
       } catch (error) {
         console.error('Error adding task:', error);
@@ -57,28 +64,23 @@ function App() {
   };
 
   // Edit an existing task
-  const editTask = (key) => {
-    const taskToEdit = tasks.find((task) => task.id === key);
+  const editTask = (id) => {
+    const taskToEdit = tasks.find((task) => task.id === id);
     if (taskToEdit) {
-      setEditingKey(key);
+      setEditingKey(id);
       setNewTask(taskToEdit.title);
     }
   };
 
-  // Save the edited task
   const saveTask = async () => {
     try {
       await axios.put(`http://localhost:5000/tasks/${editingKey}`, {
         title: newTask,
         status: tasks.find((task) => task.id === editingKey).status,
       });
-      setTasks(
-        tasks.map((task) =>
-          task.id === editingKey ? { ...task, title: newTask } : task
-        )
-      );
       setEditingKey(null);
       setNewTask('');
+      fetchTasks();
     } catch (error) {
       console.error('Error saving task:', error);
     }
@@ -88,7 +90,7 @@ function App() {
   const deleteTask = async (id) => {
     try {
       await axios.delete(`http://localhost:5000/tasks/${id}`);
-      setTasks(tasks.filter((task) => task.id !== id));
+      fetchTasks();
     } catch (error) {
       console.error('Error deleting task:', error);
     }
@@ -101,22 +103,11 @@ function App() {
         title: tasks.find((task) => task.id === id).title,
         status: 'Completed',
       });
-      setTasks(
-        tasks.map((task) =>
-          task.id === id ? { ...task, status: 'Completed' } : task
-        )
-      );
+      fetchTasks();
     } catch (error) {
       console.error('Error marking task as complete:', error);
     }
   };
-
-  // Filter tasks based on checkboxes
-  const filteredTasks = tasks.filter((task) => {
-    if (task.status === 'Completed' && !showCompleted) return false;
-    if (task.status === 'Pending' && !showPending) return false;
-    return true;
-  });
 
   return (
     <div
@@ -190,21 +181,12 @@ function App() {
       >
         <TableHeader columns={columns}>
           {(column) => (
-            <TableColumn
-              key={column.key}
-              style={{
-                textAlign: 'center',
-                ...(column.key === 'actions' && { width: '250px' }),
-              }}
-            >
+            <TableColumn key={column.key} style={{ textAlign: 'center', ...(column.key === 'actions' && { width: '250px' }) }}>
               {column.label}
             </TableColumn>
           )}
         </TableHeader>
-        <TableBody
-          items={filteredTasks}
-          emptyContent={"No tasks to display."}
-        >
+        <TableBody items={tasks} emptyContent={"No tasks to display."}>
           {(task) => (
             <TableRow key={task.id}>
               {columns.map((column) => (
